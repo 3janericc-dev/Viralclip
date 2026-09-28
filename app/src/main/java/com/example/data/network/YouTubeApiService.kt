@@ -17,6 +17,15 @@ class YouTubeApiService(
         .build()
 ) {
 
+    companion object {
+        const val MOBILE_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36"
+
+        const val EXTRACTOR_ARGS_ANDROID = "youtube:player_client=android"
+        const val EXTRACTOR_ARGS_IOS = "youtube:player_client=ios"
+        const val PROGRESSIVE_FORMAT = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]"
+    }
+
     /**
      * Extracts YouTube video ID from various link formats.
      */
@@ -51,13 +60,13 @@ class YouTubeApiService(
 
             val request = Request.Builder()
                 .url(oembedUrl)
-                .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:120.0)")
+                .header("User-Agent", MOBILE_USER_AGENT)
+                .header("Accept", "application/json")
                 .get()
                 .build()
 
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
-                // If oEmbed fails (e.g. age-restricted or private), provide graceful fallback metadata
                 val fallbackThumbnail = "https://img.youtube.com/vi/$videoId/maxresdefault.jpg"
                 return@withContext Result.success(
                     VideoMetadata(
@@ -102,7 +111,9 @@ class YouTubeApiService(
                 val timedTextUrl = "https://www.youtube.com/api/timedtext?v=${metadata.videoId}&lang=$lang"
                 val request = Request.Builder()
                     .url(timedTextUrl)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    .header("User-Agent", MOBILE_USER_AGENT)
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Referer", "https://www.youtube.com/")
                     .get()
                     .build()
 

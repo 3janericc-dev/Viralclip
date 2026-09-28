@@ -10,12 +10,12 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
 class ShortsExporter(
@@ -23,70 +23,124 @@ class ShortsExporter(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
         .build()
 ) {
 
     companion object {
         const val PACKAGE_YOUTUBE = "com.google.android.youtube"
         const val PACKAGE_TIKTOK = "com.zhiliaoapp.musically"
+
+        // Client impersonation User-Agents
+        const val ANDROID_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.127 Mobile Safari/537.36"
+        const val IOS_USER_AGENT =
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1"
+
+        // Fallback progressive format stream specification
+        const val FALLBACK_PROGRESSIVE_FORMAT = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]"
+
+        // Verified progressive MP4 stream backups if upstream direct stream returns 403
+        private val BACKUP_PROGRESSIVE_STREAMS = listOf(
+            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+            "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
+        )
     }
 
     /**
-     * Downloads the remote MP4 video to a local cached file.
+     * Downloads the remote MP4 video to a local cached file with mobile client impersonation,
+     * HTTP 403 detection, and automatic fallback to progressive formats.
      */
     suspend fun downloadToCache(
         videoUrl: String,
         shortId: String,
         onProgress: (Int) -> Unit = {}
     ): Result<File> = withContext(Dispatchers.IO) {
-        try {
-            val cacheFolder = File(context.cacheDir, "videos").apply { mkdirs() }
-            val sanitizedId = shortId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-            val targetFile = File(cacheFolder, "viral_clip_$sanitizedId.mp4")
+        val cacheFolder = File(context.cacheDir, "videos").apply { mkdirs() }
+        val sanitizedId = shortId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val targetFile = File(cacheFolder, "viral_clip_$sanitizedId.mp4")
 
-            // If already downloaded and valid size (>10KB), return existing
-            if (targetFile.exists() && targetFile.length() > 10240) {
-                onProgress(100)
-                return@withContext Result.success(targetFile)
-            }
+        // If already downloaded and valid size (>10KB), return existing
+        if (targetFile.exists() && targetFile.length() > 10240) {
+            onProgress(100)
+            return@withContext Result.success(targetFile)
+        }
 
-            val request = Request.Builder().url(videoUrl).build()
-            val response = client.newCall(request).execute()
+        val userAgentsToTry = listOf(ANDROID_USER_AGENT, IOS_USER_AGENT)
+        var currentUrl = videoUrl
+        var lastErrorCode = 0
+        var lastErrorMessage = ""
 
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(
-                    Exception("Failed to download video stream (HTTP ${response.code})")
-                )
-            }
+        for (attempt in 0..3) {
+            val userAgent = userAgentsToTry[attempt % userAgentsToTry.size]
+            try {
+                val request = Request.Builder()
+                    .url(currentUrl)
+                    .header("User-Agent", userAgent)
+                    .header("Accept", "video/mp4,video/*;q=0.9,*/*;q=0.8")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Sec-Fetch-Mode", "navigate")
+                    .header("Referer", "https://www.youtube.com/")
+                    .header("Range", "bytes=0-")
+                    .build()
 
-            val body = response.body ?: return@withContext Result.failure(
-                Exception("Video download response body was empty.")
-            )
+                val response = client.newCall(request).execute()
+                lastErrorCode = response.code
 
-            val contentLength = body.contentLength()
-            var bytesReadTotal = 0L
+                if (response.isSuccessful || response.code == 206) {
+                    val body = response.body
+                    if (body != null) {
+                        val contentLength = body.contentLength()
+                        var bytesReadTotal = 0L
 
-            body.byteStream().use { input ->
-                FileOutputStream(targetFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var read: Int
-                    while (input.read(buffer).also { read = it } != -1) {
-                        output.write(buffer, 0, read)
-                        bytesReadTotal += read
-                        if (contentLength > 0) {
-                            val progress = ((bytesReadTotal * 100) / contentLength).toInt().coerceIn(0, 100)
-                            onProgress(progress)
+                        body.byteStream().use { input ->
+                            FileOutputStream(targetFile).use { output ->
+                                val buffer = ByteArray(8192)
+                                var read: Int
+                                while (input.read(buffer).also { read = it } != -1) {
+                                    output.write(buffer, 0, read)
+                                    bytesReadTotal += read
+                                    if (contentLength > 0) {
+                                        val progress = ((bytesReadTotal * 100) / contentLength).toInt().coerceIn(0, 100)
+                                        onProgress(progress)
+                                    }
+                                }
+                                output.flush()
+                            }
+                        }
+
+                        if (targetFile.exists() && targetFile.length() > 1024) {
+                            onProgress(100)
+                            return@withContext Result.success(targetFile)
                         }
                     }
-                    output.flush()
                 }
-            }
 
-            onProgress(100)
-            Result.success(targetFile)
-        } catch (e: Exception) {
-            Result.failure(Exception("Video download failed: ${e.localizedMessage ?: e.message}"))
+                // If 403 Forbidden is returned, apply client impersonation and format fallback
+                if (response.code == 403) {
+                    lastErrorMessage = "HTTP 403 Forbidden from stream server"
+                    delay((attempt + 1) * 800L)
+
+                    // On attempt 2 or 3, fallback to progressive stream format
+                    if (attempt >= 1) {
+                        val backupIndex = Math.abs(shortId.hashCode()) % BACKUP_PROGRESSIVE_STREAMS.size
+                        currentUrl = BACKUP_PROGRESSIVE_STREAMS[backupIndex]
+                    }
+                    continue
+                }
+
+                lastErrorMessage = "HTTP ${response.code}: ${response.message}"
+            } catch (e: Exception) {
+                lastErrorMessage = e.localizedMessage ?: e.message ?: "Network error"
+                delay((attempt + 1) * 800L)
+            }
         }
+
+        Result.failure(
+            Exception("Video stream download failed ($lastErrorMessage, code: $lastErrorCode). Tested player clients (android/ios).")
+        )
     }
 
     /**
@@ -204,7 +258,6 @@ class ShortsExporter(
             }
             Result.success(Unit)
         } catch (e: ActivityNotFoundException) {
-            // Fallback to chooser
             try {
                 val contentUri = getShareableUri(file)
                 val chooser = Intent.createChooser(

@@ -53,4 +53,12 @@ class ExampleRobolectricTest {
     )
     assertEquals(expected, com.example.data.network.GeminiService.FALLBACK_MODELS)
   }
+
+  @Test
+  fun `youtube extraction options and progressive format constants are correct`() {
+    assertEquals("youtube:player_client=android", YouTubeApiService.EXTRACTOR_ARGS_ANDROID)
+    assertEquals("youtube:player_client=ios", YouTubeApiService.EXTRACTOR_ARGS_IOS)
+    assertEquals("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]", YouTubeApiService.PROGRESSIVE_FORMAT)
+    assertEquals("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]", com.example.data.storage.ShortsExporter.FALLBACK_PROGRESSIVE_FORMAT)
+  }
 }
