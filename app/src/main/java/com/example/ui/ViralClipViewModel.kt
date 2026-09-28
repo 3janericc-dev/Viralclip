@@ -181,7 +181,16 @@ class ViralClipViewModel(application: Application) : AndroidViewModel(applicatio
                     videoTitle = metadata.title
                 )
 
-                val geminiResult = geminiService.analyzeTranscript(key, transcript)
+                val geminiResult = geminiService.analyzeTranscript(
+                    apiKey = key,
+                    transcript = transcript,
+                    onStatusUpdate = { status ->
+                        _processingState.value = ProcessingState.AnalyzingViralMoments(
+                            videoTitle = metadata.title,
+                            statusText = status
+                        )
+                    }
+                )
                 if (geminiResult.isFailure) {
                     val err = ProcessingState.Error(
                         stage = ProcessingState.Stage.AI_ANALYSIS,

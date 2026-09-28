@@ -23,10 +23,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeMute
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -248,7 +248,7 @@ fun VerticalExoPlayerView(
                     .testTag("mute_unmute_button")
             ) {
                 Icon(
-                    imageVector = if (isMuted) Icons.Default.VolumeMute else Icons.Default.VolumeUp,
+                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeMute else Icons.AutoMirrored.Filled.VolumeUp,
                     contentDescription = if (isMuted) "Unmute" else "Mute",
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)

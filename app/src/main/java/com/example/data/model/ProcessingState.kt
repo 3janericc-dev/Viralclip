@@ -9,7 +9,8 @@ sealed interface ProcessingState {
 
     data class AnalyzingViralMoments(
         val message: String = "Gemini AI identifying viral short moments...",
-        val videoTitle: String
+        val videoTitle: String,
+        val statusText: String? = null
     ) : ProcessingState
 
     data class RenderingVideo(

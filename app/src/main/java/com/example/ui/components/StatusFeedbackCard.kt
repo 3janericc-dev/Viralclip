@@ -154,7 +154,8 @@ fun StatusFeedbackCard(
                 title = "Stage 2",
                 label = "Gemini AI identifying viral short moments...",
                 subtext = if (stage2Active) {
-                    (state as? ProcessingState.AnalyzingViralMoments)?.videoTitle ?: "Analyzing retention curves & hook scores"
+                    val stage2State = state as? ProcessingState.AnalyzingViralMoments
+                    stage2State?.statusText ?: stage2State?.videoTitle ?: "Analyzing retention curves & hook scores"
                 } else null,
                 icon = Icons.Default.AutoAwesome,
                 isActive = stage2Active,

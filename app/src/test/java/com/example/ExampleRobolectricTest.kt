@@ -42,4 +42,15 @@ class ExampleRobolectricTest {
     assertEquals(30, moment.durationSeconds)
     assertEquals("00:15 - 00:45 (30s)", moment.formattedTimeRange())
   }
+
+  @Test
+  fun `gemini fallback models chain is in exact order`() {
+    val expected = listOf(
+      "gemini-3.5-flash",
+      "gemini-2.5-flash",
+      "gemini-1.5-flash",
+      "gemini-3.1-flash-lite"
+    )
+    assertEquals(expected, com.example.data.network.GeminiService.FALLBACK_MODELS)
+  }
 }
