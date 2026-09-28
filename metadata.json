@@ -1,0 +1,6 @@
+{
+  "name": "ViralClip",
+  "description": "Extract, clip, and format YouTube videos into 9:16 vertical shorts with AI-powered viral highlight detection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
